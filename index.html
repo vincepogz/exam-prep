@@ -1,0 +1,341 @@
+ <!doctype html>
+ <html lang="en">
+   <head>
+     <meta charset="UTF-8" />
+     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+     <title>CKA CKS LFCS 8-Week Progress Tracker</title>
+     <link rel="preconnect" href="https://fonts.googleapis.com" />
+     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+     <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@400;500;700;800&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
+     <link rel="stylesheet" href="./style.css" />
+   </head>
+   <body>
+     <div class="bg-shape shape-a"></div>
+     <div class="bg-shape shape-b"></div>
+ 
+     <main class="container" x-data="studyTracker()" x-init="init()">
+       <header class="hero card reveal">
+         <p class="eyebrow">80-Hour Mission</p>
+         <h1>CKA + CKS + LFCS<br />Progress Console</h1>
+         <p class="subtitle">Built for your 8-week beginner plan: check tasks, run labs, test knowledge, and track weak areas.</p>
+ 
+         <div class="hero-stats">
+           <div>
+             <span class="stat-label">Completion</span>
+             <span class="stat-value" x-text="overallCompletion + '%'">0%</span>
+           </div>
+           <div>
+             <span class="stat-label">Completed Tasks</span>
+             <span class="stat-value" x-text="completedCount">0</span>
+           </div>
+           <div>
+             <span class="stat-label">Total Tasks</span>
+             <span class="stat-value" x-text="totalTaskCount">0</span>
+           </div>
+           <div>
+             <span class="stat-label">Current Week</span>
+             <span class="stat-value" x-text="currentWeekLabel">Week 1</span>
+           </div>
+         </div>
+       </header>
+ 
+       <section class="card reveal">
+         <div class="section-head">
+           <h2>Study Week Tracker</h2>
+           <div class="actions">
+             <button class="btn ghost" @click="expandAll()">Expand all</button>
+             <button class="btn ghost" @click="collapseAll()">Collapse all</button>
+             <button class="btn ghost" @click="exportProgress()">Export backup</button>
+             <button class="btn ghost" @click="$refs.importFile.click()">Import backup</button>
+             <input type="file" x-ref="importFile" accept="application/json" class="hidden-input" @change="importProgress($event)" />
+             <button class="btn danger" @click="resetProgress()">Reset progress</button>
+           </div>
+         </div>
+ 
+         <template x-for="(week, wIndex) in weeks" :key="week.id">
+           <article class="week-block" :class="{open: week.open}">
+             <button class="week-header" @click="week.open = !week.open; saveState()">
+               <div>
+                 <h3 x-text="week.title"></h3>
+                 <p x-text="week.goal"></p>
+               </div>
+               <div class="week-meta">
+                 <span class="pill" x-text="weekCompletion(week) + '% complete'"></span>
+                 <span class="chevron" x-text="week.open ? '−' : '+'"></span>
+               </div>
+             </button>
+ 
+             <div class="week-content" x-show="week.open" x-transition>
+               <ul class="task-list">
+                 <template x-for="task in week.tasks" :key="task.id">
+                   <li>
+                     <label>
+                       <input type="checkbox" :checked="isDone(task.id)" @change="toggleTask(task.id)" />
+                       <span>
+                         <strong x-text="task.title"></strong>
+                         <em x-text="task.detail"></em>
+                       </span>
+                     </label>
+                   </li>
+                 </template>
+               </ul>
+             </div>
+           </article>
+         </template>
+       </section>
+ 
+       <section class="grid-two">
+         <article class="card reveal">
+           <div class="section-head">
+             <h2>Knowledge Test</h2>
+             <div class="actions">
+               <button class="btn" @click="startQuiz()" :disabled="quizActive">Start timed 10-question test</button>
+               <button class="btn ghost" @click="startWeakQuiz()" :disabled="quizActive || weakQuestionPool().length === 0">Test weak topics</button>
+             </div>
+           </div>
+ 
+           <template x-if="!quizActive">
+             <div class="quiz-idle">
+               <p>Use this to rehearse Linux, Kubernetes, and Security commands under exam-style pressure. Tests are timed to build exam pacing.</p>
+               <p class="small">Last score: <strong x-text="quizStats.lastScoreText"></strong></p>
+               <p class="small">Best score: <strong x-text="quizStats.bestScoreText"></strong></p>
+             </div>
+           </template>
+ 
+           <template x-if="quizActive">
+             <div class="quiz-active">
+               <p class="small quiz-status-row">
+                 <span>Question <span x-text="quizIndex + 1"></span> / <span x-text="activeQuiz.length"></span></span>
+                 <span class="timer" :class="{low: quizSecondsLeft <= 60}" x-text="formatTime(quizSecondsLeft)"></span>
+               </p>
+               <h3 x-text="currentQuestion().prompt"></h3>
+               <ul class="options">
+                 <template x-for="(opt, idx) in currentQuestion().options" :key="idx">
+                   <li>
+                     <button class="option-btn" @click="answerQuestion(idx)" :disabled="currentQuestion().answered">
+                       <span x-text="String.fromCharCode(65 + idx) + '. ' + opt"></span>
+                     </button>
+                   </li>
+                 </template>
+               </ul>
+               <div class="quiz-feedback" x-show="currentQuestion().answered">
+                 <p x-text="currentQuestion().isCorrect ? 'Correct.' : 'Not quite.'"></p>
+                 <p class="small" x-text="currentQuestion().explain"></p>
+                 <button class="btn" @click="nextQuestion()" x-text="quizIndex === activeQuiz.length - 1 ? 'Finish test' : 'Next question'"></button>
+               </div>
+             </div>
+           </template>
+         </article>
+ 
+         <article class="card reveal">
+           <div class="section-head">
+             <h2>Guides and Free Training</h2>
+           </div>
+           <ul class="links">
+             <li><a href="https://kubernetes.io/docs/home/" target="_blank" rel="noopener noreferrer">Kubernetes Official Docs</a><span>Primary reference for CKA and CKS tasks</span></li>
+             <li><a href="https://killercoda.com/" target="_blank" rel="noopener noreferrer">Killercoda Free Labs</a><span>Hands-on Kubernetes and Linux scenarios</span></li>
+             <li><a href="https://training.linuxfoundation.org/resources/free-courses/" target="_blank" rel="noopener noreferrer">Linux Foundation Free Courses</a><span>Free foundational courses and intros</span></li>
+             <li><a href="https://github.com/kubernetes/community/blob/master/contributors/devel/sig-node/kubelet.md" target="_blank" rel="noopener noreferrer">Kubelet Deep Dive Notes</a><span>Useful for node troubleshooting contexts</span></li>
+             <li><a href="https://www.civo.com/academy" target="_blank" rel="noopener noreferrer">Civo Academy Free Kubernetes Content</a><span>Extra beginner-friendly walkthroughs</span></li>
+             <li><a href="https://www.digitalocean.com/community/tutorials" target="_blank" rel="noopener noreferrer">DigitalOcean Community Tutorials</a><span>Free Linux and container operations guides</span></li>
+           </ul>
+         </article>
+       </section>
+ 
+       <section class="card reveal">
+         <div class="section-head">
+           <h2>Quick Study Guide</h2>
+         </div>
+         <ul class="task-list">
+           <li>
+             <label>
+               <input type="checkbox" disabled />
+               <span>
+                 <strong>Linux disk triage sequence</strong>
+                 <em>Run: df -h /var, df -i /var, du -xhd1 /var | sort -h, find /var/log -xdev -type f -printf '%s %p\n' | sort -nr | head -10, systemctl --failed.</em>
+                 <a class="guide-link" href="https://www.digitalocean.com/community/tutorials/how-to-find-large-files-and-directories-in-linux" target="_blank" rel="noopener noreferrer">Read: Finding large files in Linux &rarr;</a>
+               </span>
+             </label>
+           </li>
+           <li>
+             <label>
+               <input type="checkbox" disabled />
+               <span>
+                 <strong>systemd service recovery sequence</strong>
+                 <em>Run: systemctl --failed, systemctl status &lt;unit&gt; --no-pager -l, journalctl -u &lt;unit&gt; -n 50 --no-pager, systemctl restart &lt;unit&gt;, verify with systemctl status.</em>
+                 <a class="guide-link" href="https://www.digitalocean.com/community/tutorials/how-to-use-systemctl-to-manage-systemd-services-and-units" target="_blank" rel="noopener noreferrer">Read: Managing systemd services &rarr;</a>
+               </span>
+             </label>
+           </li>
+           <li>
+             <label>
+               <input type="checkbox" disabled />
+               <span>
+                 <strong>Linux networking triage sequence</strong>
+                 <em>Run: ip addr, ip route, ss -tlnp, ping &lt;host&gt;, dig &lt;hostname&gt;, cat /etc/resolv.conf.</em>
+                 <a class="guide-link" href="https://www.digitalocean.com/community/tutorials/an-introduction-to-networking-terminology-interfaces-and-protocols" target="_blank" rel="noopener noreferrer">Read: Linux networking fundamentals &rarr;</a>
+               </span>
+             </label>
+           </li>
+           <li>
+             <label>
+               <input type="checkbox" disabled />
+               <span>
+                 <strong>Kubernetes failed workload sequence</strong>
+                 <em>Run: kubectl get pods -A, kubectl describe pod, kubectl logs --previous, kubectl get events --sort-by=.lastTimestamp, kubectl get deploy,rs,po,svc -n &lt;ns&gt;.</em>
+                 <a class="guide-link" href="https://kubernetes.io/docs/tasks/debug/debug-application/" target="_blank" rel="noopener noreferrer">Read: Kubernetes debug application guide &rarr;</a>
+               </span>
+             </label>
+           </li>
+           <li>
+             <label>
+               <input type="checkbox" disabled />
+               <span>
+                 <strong>Kubernetes Pending Pod sequence</strong>
+                 <em>Run: kubectl describe pod &lt;name&gt; | grep -A5 Events, check resource requests vs node capacity, check taints and tolerations, kubectl get nodes.</em>
+                 <a class="guide-link" href="https://kubernetes.io/docs/tasks/debug/debug-application/debug-pods/" target="_blank" rel="noopener noreferrer">Read: Debugging Pods &rarr;</a>
+               </span>
+             </label>
+           </li>
+           <li>
+             <label>
+               <input type="checkbox" disabled />
+               <span>
+                 <strong>Service endpoint triage sequence</strong>
+                 <em>Run: kubectl get endpoints &lt;svc&gt;, compare svc selector vs pod labels with kubectl get svc,pods --show-labels, verify pod is Running and Ready.</em>
+                 <a class="guide-link" href="https://kubernetes.io/docs/tasks/debug/debug-application/debug-service/" target="_blank" rel="noopener noreferrer">Read: Debugging Services &rarr;</a>
+               </span>
+             </label>
+           </li>
+           <li>
+             <label>
+               <input type="checkbox" disabled />
+               <span>
+                 <strong>RBAC denial sequence</strong>
+                 <em>Run: kubectl auth can-i --as system:serviceaccount:&lt;ns&gt;:&lt;sa&gt; &lt;verb&gt; &lt;resource&gt;, inspect rolebindings, inspect roles or clusterroles, retest command.</em>
+                 <a class="guide-link" href="https://kubernetes.io/docs/reference/access-authn-authz/rbac/" target="_blank" rel="noopener noreferrer">Read: Kubernetes RBAC reference &rarr;</a>
+               </span>
+             </label>
+           </li>
+           <li>
+             <label>
+               <input type="checkbox" disabled />
+               <span>
+                 <strong>etcd backup and restore sequence</strong>
+                 <em>Backup: ETCDCTL_API=3 etcdctl snapshot save &lt;file&gt; --endpoints --cacert --cert --key. Restore: etcdctl snapshot restore, update static pod manifest data-dir path.</em>
+                 <a class="guide-link" href="https://kubernetes.io/docs/tasks/administer-cluster/configure-upgrade-etcd/#backing-up-an-etcd-cluster" target="_blank" rel="noopener noreferrer">Read: Backing up etcd &rarr;</a>
+               </span>
+             </label>
+           </li>
+           <li>
+             <label>
+               <input type="checkbox" disabled />
+               <span>
+                 <strong>Node NotReady triage sequence</strong>
+                 <em>Run: kubectl describe node &lt;name&gt;, ssh to node, systemctl status kubelet, journalctl -u kubelet -n 50, check disk and memory with df -h and free -h.</em>
+                 <a class="guide-link" href="https://kubernetes.io/docs/tasks/debug/debug-cluster/debug-cluster/" target="_blank" rel="noopener noreferrer">Read: Debugging cluster nodes &rarr;</a>
+               </span>
+             </label>
+           </li>
+           <li>
+             <label>
+               <input type="checkbox" disabled />
+               <span>
+                 <strong>NetworkPolicy troubleshooting sequence</strong>
+                 <em>Run: kubectl get netpol -n &lt;ns&gt;, kubectl describe netpol &lt;name&gt;, test with kubectl run test --image=busybox -it --rm -- wget &lt;target&gt;.</em>
+                 <a class="guide-link" href="https://kubernetes.io/docs/concepts/services-networking/network-policies/" target="_blank" rel="noopener noreferrer">Read: NetworkPolicy concepts &rarr;</a>
+               </span>
+             </label>
+           </li>
+           <li>
+             <label>
+               <input type="checkbox" disabled />
+               <span>
+                 <strong>PVC binding triage sequence</strong>
+                 <em>Run: kubectl describe pvc &lt;name&gt;, kubectl get pv, check storageClass matches, check accessMode and storage size align with available PVs.</em>
+                 <a class="guide-link" href="https://kubernetes.io/docs/concepts/storage/persistent-volumes/" target="_blank" rel="noopener noreferrer">Read: Persistent Volumes concepts &rarr;</a>
+               </span>
+             </label>
+           </li>
+           <li>
+             <label>
+               <input type="checkbox" disabled />
+               <span>
+                 <strong>Certificate expiration check sequence</strong>
+                 <em>Run: kubeadm certs check-expiration, openssl x509 -noout -dates -in &lt;cert.crt&gt;, renew with kubeadm certs renew all, restart static pods if needed.</em>
+                 <a class="guide-link" href="https://kubernetes.io/docs/tasks/administer-cluster/kubeadm/kubeadm-certs/" target="_blank" rel="noopener noreferrer">Read: Certificate management with kubeadm &rarr;</a>
+               </span>
+             </label>
+           </li>
+           <li>
+             <label>
+               <input type="checkbox" disabled />
+               <span>
+                 <strong>Free learning path recommendation</strong>
+                 <em>Start with Linux Foundation free courses, then Kubernetes docs task-by-task, and finish each week with one Killercoda scenario to build muscle memory.</em>
+                 <a class="guide-link" href="https://killercoda.com/" target="_blank" rel="noopener noreferrer">Practice: Killercoda free interactive labs &rarr;</a>
+               </span>
+             </label>
+           </li>
+         </ul>
+       </section>
+ 
+       <section class="grid-two">
+         <article class="card reveal">
+           <div class="section-head">
+             <h2>Weak Topics Radar</h2>
+           </div>
+           <p class="small" x-show="weakTopics.length === 0">No misses yet. Take a knowledge test to populate this.</p>
+           <div class="chips">
+             <template x-for="topic in weakTopics" :key="topic.name">
+               <span class="chip" :class="severityClass(topic.wrong)" x-text="topic.name + ' (' + topic.wrong + ' misses)'"></span>
+             </template>
+           </div>
+         </article>
+ 
+         <article class="card reveal">
+           <div class="section-head">
+             <h2>Strengths Radar</h2>
+           </div>
+           <p class="small" x-show="strongTopics.length === 0">No correct answers logged yet. Take a knowledge test to populate this.</p>
+           <div class="chips">
+             <template x-for="topic in strongTopics" :key="topic.name">
+               <span class="chip low" x-text="topic.name + ' (' + topic.correct + ' correct)'"></span>
+             </template>
+           </div>
+         </article>
+       </section>
+ 
+       <section class="card reveal">
+         <div class="section-head">
+           <h2>Mistake and Command Log</h2>
+         </div>
+         <p class="small">Log commands you got wrong or slow on. Review with spaced repetition (Day 1, 3, 7, 14, 28).</p>
+         <form class="log-form" @submit.prevent="addNote()">
+           <input type="text" x-model="noteDraft" placeholder="e.g. forgot -x flag on du during inode triage" />
+           <button class="btn" type="submit">Add entry</button>
+         </form>
+         <ul class="note-list">
+           <template x-for="note in notes" :key="note.id">
+             <li>
+               <span class="note-text" x-text="note.text"></span>
+               <span class="note-meta">
+                 <span x-text="note.date"></span>
+                 <button class="btn ghost small-btn" @click="deleteNote(note.id)">Remove</button>
+               </span>
+             </li>
+           </template>
+         </ul>
+         <p class="small" x-show="notes.length === 0">No entries yet. Add mistakes right after each lab or mock exam.</p>
+       </section>
+     </main>
+ 
+     <script src="./app.js"></script>
+     <script
+       defer
+       src="https://cdn.jsdelivr.net/npm/alpinejs@3.15.12/dist/cdn.min.js"
+       integrity="sha384-pb6hrQvo4s23cEUFtj0CZkzGE3jyK3pj26RIupXXxhSrrcUA/Cn0lZgcCrGH0t6L"
+       crossorigin="anonymous"
+     ></script>
+   </body>
+ </html>
